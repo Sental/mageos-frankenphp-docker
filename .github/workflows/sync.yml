@@ -1,0 +1,65 @@
+# Keeps every php8.x branch in step with main. After each push to main, it opens a pull
+# request from main into each version branch that's behind, unless one is already open
+# (an open one follows main by itself). It never pushes to a branch: what lands is only
+# what you merge.
+#
+# Merge these pull requests with a merge commit, never squash or rebase. Otherwise the
+# branch doesn't record main's commits as merged, and the next sync replays all of
+# main's history. The php* ruleset enforces this (see README.md).
+#
+# It runs as the sync GitHub App, not with this workflow's own token: pull requests
+# opened with that token don't start other workflows, so they would get no test build.
+# The app needs Pull requests (write) and Contents (read), and nothing else.
+name: sync
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get a token from the sync app
+        id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ secrets.SYNC_APP_CLIENT_ID }}
+          private-key: ${{ secrets.SYNC_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-pull-requests: write
+
+      - name: Open a pull request into each version branch that's behind main
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          REPO: ${{ github.repository }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          branches=$(gh api "repos/$REPO/branches" --paginate --jq '.[].name | select(test("^php[0-9]+\\.[0-9]+$"))')
+          if [ -z "$branches" ]; then
+            echo "No php8.x branches yet: nothing to sync."
+            exit 0
+          fi
+          for branch in $branches; do
+            ahead=$(gh api "repos/$REPO/compare/$branch...main" --jq '.ahead_by')
+            if [ "$ahead" = "0" ]; then
+              echo "$branch: has everything from main"
+              continue
+            fi
+            open=$(gh api "repos/$REPO/pulls?state=open&base=$branch&head=$OWNER:main" --jq 'length')
+            if [ "$open" != "0" ]; then
+              echo "$branch: a sync pull request is already open, and follows main by itself"
+              continue
+            fi
+            gh api "repos/$REPO/pulls" \
+              -f title="Sync main into $branch" \
+              -f head=main \
+              -f base="$branch" \
+              -f body="Brings $branch up to date with main ($ahead commits). The test build runs on this pull request; merging publishes $branch's images. Merge with a merge commit, never squash or rebase." \
+              --jq '"\(.base.ref): opened #\(.number)"'
+          done

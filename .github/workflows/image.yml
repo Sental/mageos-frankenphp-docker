@@ -1,0 +1,166 @@
+# Builds this branch's two images, runtime and build, for its PHP version.
+#
+#   pull request into php8.x   build and check them; nothing is published
+#   push to php8.x (a merge)   build, check, then publish both to Docker Hub:
+#                                <php>-runtime, <php>-runtime-<UTC datetime>,
+#                                <php>-build,   <php>-build-<UTC datetime>
+#
+# This file is the same on every branch. It never runs on main, which has no
+# base.Dockerfile: each php8.x branch names its FrankenPHP base there.
+#
+# Publishing runs in the branch's environment (php8.3 for php8.3, ...). Its php_string
+# variable is the PHP version, and its secrets are the only Docker Hub credentials, so
+# only a merge into a version branch can publish.
+name: image
+
+on:
+  pull_request:
+    branches: ["php*"]
+  push:
+    branches: ["php*"]
+
+permissions:
+  contents: read
+
+env:
+  IMAGE: sental90/mageos-frankenphp-docker
+
+jobs:
+  test:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # No environment here: a pull request never sees the publishing secrets. The
+      # PHP version comes from the target branch's name instead.
+      - name: Read the base image
+        id: base
+        env:
+          BRANCH: ${{ github.base_ref }}
+        run: |
+          php=${BRANCH#php}
+          ref=$(bash .github/scripts/base.sh "$php")
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build runtime
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runtime
+          build-contexts: upstream=docker-image://${{ steps.base.outputs.ref }}
+          load: true
+          tags: local/runtime:test
+          cache-from: type=gha,scope=${{ github.base_ref }}
+
+      - name: Build build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: build
+          build-contexts: upstream=docker-image://${{ steps.base.outputs.ref }}
+          load: true
+          tags: local/build:test
+          cache-from: type=gha,scope=${{ github.base_ref }}
+
+      - name: Check the images
+        run: bash .github/scripts/check.sh local/runtime:test local/build:test
+
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name }}
+    concurrency:
+      group: publish-${{ github.ref_name }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v7
+
+      # One instant for the whole run, so all four tags share one datetime.
+      - name: Read the base image
+        id: base
+        env:
+          PHP: ${{ vars.php_string }}
+        run: |
+          [ -n "$PHP" ] || { echo "The $GITHUB_REF_NAME environment has no php_string variable." >&2; exit 1; }
+          [ "$GITHUB_REF_NAME" = "php$PHP" ] \
+            || { echo "php_string is $PHP, but this is branch $GITHUB_REF_NAME." >&2; exit 1; }
+          ref=$(bash .github/scripts/base.sh "$PHP")
+          now=$(date -u +%s)
+          {
+            echo "ref=$ref"
+            echo "datetime=$(date -u -d "@$now" +%Y%m%d%H%M)"
+            echo "created=$(date -u -d "@$now" +%Y-%m-%dT%H:%M:%SZ)"
+          } >> "$GITHUB_OUTPUT"
+
+      # Before the builds too: pulling the FrankenPHP base logged in avoids Docker Hub's
+      # anonymous rate limit.
+      - uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build runtime
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runtime
+          build-contexts: upstream=docker-image://${{ steps.base.outputs.ref }}
+          load: true
+          tags: local/runtime:test
+          cache-from: type=gha,scope=${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
+
+      - name: Build build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: build
+          build-contexts: upstream=docker-image://${{ steps.base.outputs.ref }}
+          load: true
+          tags: local/build:test
+          cache-from: type=gha,scope=${{ github.ref_name }}
+          cache-to: type=gha,mode=max,scope=${{ github.ref_name }}
+
+      - name: Check the images
+        run: bash .github/scripts/check.sh local/runtime:test local/build:test
+
+      # The same builds again, from the cache, now pushed. Nothing is published unless
+      # both images passed the check above.
+      - name: Publish runtime
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: runtime
+          build-contexts: upstream=docker-image://${{ steps.base.outputs.ref }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ vars.php_string }}-runtime
+            ${{ env.IMAGE }}:${{ vars.php_string }}-runtime-${{ steps.base.outputs.datetime }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.base.outputs.created }}
+            org.opencontainers.image.version=${{ steps.base.outputs.datetime }}
+            org.opencontainers.image.base.name=${{ steps.base.outputs.ref }}
+          cache-from: type=gha,scope=${{ github.ref_name }}
+
+      - name: Publish build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: build
+          build-contexts: upstream=docker-image://${{ steps.base.outputs.ref }}
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ vars.php_string }}-build
+            ${{ env.IMAGE }}:${{ vars.php_string }}-build-${{ steps.base.outputs.datetime }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.created=${{ steps.base.outputs.created }}
+            org.opencontainers.image.version=${{ steps.base.outputs.datetime }}
+            org.opencontainers.image.base.name=${{ steps.base.outputs.ref }}
+          cache-from: type=gha,scope=${{ github.ref_name }}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "baseBranchPatterns": ["$default", "/^php\\d+\\.\\d+$/"],
+  "automerge": false,
+  "ignoreDeps": ["upstream"],
+  "packageRules": [
+    {
+      "description": "On the version branches, nothing but base.Dockerfile: everything else there comes from main, through the sync pull requests.",
+      "matchBaseBranches": ["/^php\\d+\\.\\d+$/"],
+      "enabled": false
+    },
+    {
+      "description": "Each version branch's FrankenPHP base: bump the version on a release, and keep the digest current when upstream rebuilds the tag (PHP patch releases, Debian fixes).",
+      "matchBaseBranches": ["/^php\\d+\\.\\d+$/"],
+      "matchFileNames": ["base.Dockerfile"],
+      "enabled": true,
+      "pinDigests": true
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "igbinary, pinned for install-php-extensions in the Dockerfile. The pin can be an RC: PECL publishes 3.2.17RC1 as igbinary's stable release. So the versioning reads RCs, and Renovate proposes the final release once it's tagged.",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": ["\\bigbinary-(?<currentValue>\\d+\\.\\d+\\.\\d+(?:RC\\d+)?)\\b"],
+      "depNameTemplate": "igbinary",
+      "packageNameTemplate": "igbinary/igbinary",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)(?<prerelease>RC\\d+)?$"
+    },
+    {
+      "customType": "regex",
+      "description": "redis (phpredis), pinned for install-php-extensions in the Dockerfile.",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": ["\\bredis-(?<currentValue>\\d+\\.\\d+\\.\\d+)\\b"],
+      "depNameTemplate": "redis",
+      "packageNameTemplate": "phpredis/phpredis",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "imagick, pinned for install-php-extensions in the Dockerfile.",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": ["\\bimagick-(?<currentValue>\\d+\\.\\d+\\.\\d+)\\b"],
+      "depNameTemplate": "imagick",
+      "packageNameTemplate": "Imagick/imagick",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Xdebug, pinned for install-php-extensions in the Dockerfile.",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": ["\\bxdebug-(?<currentValue>\\d+\\.\\d+\\.\\d+)\\b"],
+      "depNameTemplate": "xdebug",
+      "packageNameTemplate": "xdebug/xdebug",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Composer, pinned for install-php-extensions in the Dockerfile.",
+      "managerFilePatterns": ["/(^|/)Dockerfile$/"],
+      "matchStrings": ["@composer-(?<currentValue>\\d+\\.\\d+\\.\\d+)\\b"],
+      "depNameTemplate": "composer",
+      "packageNameTemplate": "composer/composer",
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
+    }
+  ]
+}
