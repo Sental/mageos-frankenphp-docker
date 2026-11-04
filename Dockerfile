@@ -21,7 +21,13 @@
 
 FROM upstream AS runtime
 
-LABEL org.opencontainers.image.source="https://github.com/Sental/mageos-frankenphp-docker" \
+# The base image's own labels carry over unless replaced here, so every one it sets
+# (title, description, url, source, licenses, vendor) is set again, to describe this image.
+# The build target inherits them.
+LABEL org.opencontainers.image.title="FrankenPHP For MageOS" \
+      org.opencontainers.image.vendor="Mark Rees" \
+      org.opencontainers.image.url="https://github.com/Sental/mageos-frankenphp-docker" \
+      org.opencontainers.image.source="https://github.com/Sental/mageos-frankenphp-docker" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.description="Mage-OS on FrankenPHP: base images for staging, production and dev builds"
 
