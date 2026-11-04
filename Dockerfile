@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.7
+# syntax=docker/dockerfile:1.28
 # =============================================================================
 # Base images for Mage-OS on FrankenPHP. Two targets:
 #
