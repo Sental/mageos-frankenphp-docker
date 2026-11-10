@@ -67,7 +67,7 @@ RUN apt-get update \
 # the dev image enables it with its own xdebug.ini. Composer is pinned like the PECL
 # extensions.
 RUN IPE_DONT_ENABLE=1 install-php-extensions xdebug-3.5.3 \
-    && install-php-extensions @composer-2.11.1
+    && install-php-extensions @composer-2.11.2
 
 RUN { \
         printf 'composer %s\n' "$(COMPOSER_ALLOW_SUPERUSER=1 composer --version --no-ansi 2>/dev/null)"; \
