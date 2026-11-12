@@ -1,1 +1,1 @@
-FROM dunglas/frankenphp:1.13.5-php8.3-trixie@sha256:0a0b5e4a5215c3177445834aa4c1fbdc64d2a940c2e5e11bc84113c6a0c20e74
+FROM dunglas/frankenphp:1.13.5-php8.3-trixie@sha256:5e17d7af9314b54213588803f117a2d482b6ba270b7d41381400ec78db45b36e
